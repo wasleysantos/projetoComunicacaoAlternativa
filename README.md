@@ -59,17 +59,17 @@ Explicar como executar os testes automatizados para este sistema.
 
 
 
-## 🛠️ Construído com
+## 🛠️ Construído com:
 
 Placa BitDogLab - Desenvolvimento em C
 
-## ✒️ Autores
+## ✒️ Autor
 
 Wasley dos Santos Silva - Desenvolvimento e Implementação
 
 Colaboradores - Monitora Kaillane Martins - IFMA
 
-## 🎁 Expressões de gratidão
+## 🎁 Gratidão
 
 Gostaria de expressar minha sincera gratidão aos professores do projeto Embarcatech e, em especial, à minha monitora, Kaillane Martins, por seus feedbacks valiosos. Agradeço também aos meus colegas de capacitação, Tatiana Izidio e Valmir, por compartilharem suas experiências e ideias ao longo do projeto. Por último, mas não menos importante, agradeço aos meus pais, Maryluce e Jackson, por sempre estarem ao meu lado, oferecendo apoio incondicional em tudo.
 
