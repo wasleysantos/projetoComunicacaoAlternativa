@@ -16,15 +16,13 @@ Essas instruções permitirão que você obtenha uma cópia do projeto em opera�
 
 Antes de iniciar, certifique-se de que possui os seguintes itens:
 
-BitDogLab ou Simulador Wokwi
-
-Display LCD 16x2 (conectado via I2C nos pinos 4 e 5)
-
-Módulo Joystick
+Placa BitDogLab ou Simulador Wokwi
 
 Ambiente de desenvolvimento C/C++ configurado com o SDK do Raspberry Pi Pico
 
 Ferramentas de compilação:
+
+Vscode
 
 CMake
 
@@ -32,30 +30,20 @@ GNU Arm Embedded Toolchain
 
 Python 3 (para conversão de UF2)
 
-OpenOCD (para upload do código)
-
 ### 🔧 Instalação
 
 Siga os passos abaixo para configurar o ambiente:
 
 Clone o repositório
 
-git clone https://github.com/usuario/TalkGo.git
-cd TalkGo
+git clone [https://github.com/usuario/TalkGo.git
+cd TalkGo](https://github.com/wasleysantos/projetoComunicacaoAumentativa)
 
 Configure o SDK do Raspberry Pi Pico (caso ainda não tenha instalado)
 
-export PICO_SDK_PATH=/caminho/para/o/sdk/pico-sdk
+Carregue o firmware na placa BitDogLab
 
-Crie o diretório de build e compile o projeto
-
-mkdir build && cd build
-cmake ..
-make
-
-Carregue o firmware no Raspberry Pi Pico
-
-Conecte o Raspberry Pi Pico ao seu computador enquanto pressiona o botão BOOTSEL
+Conecte a placa BitDogLab ao seu computador enquanto pressiona o botão BOOTSEL
 
 Arraste e solte o arquivo .uf2 gerado na unidade montada
 
@@ -65,52 +53,25 @@ Explicar como executar os testes automatizados para este sistema.
 
 ### 🔩 Analise os testes de ponta a ponta
 
-Explique que eles verificam esses testes e porquê.
 
-```
-Dar exemplos
-```
 
 ### ⌨️ E testes de estilo de codificação
 
-Explique que eles verificam esses testes e porquê.
 
-```
-Dar exemplos
-```
-
-## 📦 Implantação
-
-Adicione notas adicionais sobre como implantar isso em um sistema ativo
 
 ## 🛠️ Construído com
 
-Raspberry Pi Pico SDK - Desenvolvimento em C
-
-CMake - Sistema de build
-
-GNU Arm Toolchain - Compilador para ARM
-
-## 🖇️ Colaborando
-
-Por favor, leia o [COLABORACAO.md](https://gist.github.com/usuario/linkParaInfoSobreContribuicoes) para obter detalhes sobre o nosso código de conduta e o processo para nos enviar pedidos de solicitação.
-
-## 📌 Versão
-
-Nós usamos [SemVer](http://semver.org/) para controle de versão. Para as versões disponíveis, observe as [tags neste repositório](https://github.com/suas/tags/do/projeto). 
+Placa BitDogLab - Desenvolvimento em C
 
 ## ✒️ Autores
 
-[Seu Nome] - Desenvolvimento e Implementação
+Wasley dos Santos Silva - Desenvolvimento e Implementação
 
-Colaboradores - Contribuições adicionais
-
-## 📄 Licença
-
-Este projeto está sob a licença (sua licença) - veja o arquivo [LICENSE.md](https://github.com/usuario/projeto/licenca) para detalhes.
+Colaboradores - Monitora Kaillane Martins - IFMA
 
 ## 🎁 Expressões de gratidão
 
-A todos que apoiaram o desenvolvimento do TalkGo! 🚀
+Gostaria de expressar minha sincera gratidão aos professores do projeto Embarcatech e, em especial, à minha monitora, Kaillane Martins, por seus feedbacks valiosos. Agradeço também aos meus colegas de capacitação, Tatiana Izidio e Valmir, por compartilharem suas experiências e ideias ao longo do projeto. Por último, mas não menos importante, agradeço aos meus pais, Maryluce e Jackson, por sempre estarem ao meu lado, oferecendo apoio incondicional em tudo.
 
 Se este projeto ajudou você, considere compartilhar ou contribuir! 📢
+Meu linkedin: https://www.linkedin.com/in/wasley-santos-5a824291/
