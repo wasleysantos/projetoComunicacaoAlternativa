@@ -1,6 +1,8 @@
-<div align="center" >
-  <img align="center" alt="Rafa-Python" height="200" width="350" src="https://ifce.edu.br/noticias/ifce-integra-capacitacao-nacional-em-sistemas-embarcados/captura-de-tela-2024-07-08-141318-1.jpg/@@images/54478835-b15d-4db9-84b1-7b0da1d40311.jpeg">
-</div>
+<div style="display: flex; justify-content: center; align-items: center;">  
+  <img alt="Rafa-Python" height="200" width="350" style="margin: 100px;" src="https://ifce.edu.br/noticias/ifce-integra-capacitacao-nacional-em-sistemas-embarcados/captura-de-tela-2024-07-08-141318-1.jpg/@@images/54478835-b15d-4db9-84b1-7b0da1d40311.jpeg">   
+  <img alt="Image" height="200" width="350" style="margin: 50px;" src="https://github.com/user-attachments/assets/444010c4-550a-44c6-b659-39d9b441730b">  
+</div>  
+
 
 # TalkGo
 
