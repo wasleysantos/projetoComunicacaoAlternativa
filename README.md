@@ -49,13 +49,17 @@ Arraste e solte o arquivo .uf2 gerado na unidade montada
 
 ## ⚙️ Executando os testes
 
-Explicar como executar os testes automatizados para este sistema.
+No video que fiz no youtube mostra o teste do firmware rodando na placa BitDogLab, e a explicação de todos os perifericos usados da placa. 
+Link do youtube: https://www.youtube.com/watch?v=KjrngxYopJA
 
-### 🔩 Analise os testes de ponta a ponta
+![image](https://github.com/user-attachments/assets/3424a711-77cf-4cfb-95da-4de502a95250)
 
+![image](https://github.com/user-attachments/assets/806c36f2-b78b-4a9f-89cc-087cb4dfba0a)
 
+![image](https://github.com/user-attachments/assets/bff876da-86eb-4e53-a68a-575b74c45e39)
 
-### ⌨️ E testes de estilo de codificação
+![image](https://github.com/user-attachments/assets/17b83d9a-d9fa-4e39-99e8-4992f6ee14e1)
+
 
 
 
