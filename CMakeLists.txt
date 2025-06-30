@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(projetoComunicacaoAumentativa projetoComunicacaoAumentativa.c inc/ssd1306_i2c.c)
+add_executable(projetoComunicacaoAumentativa projetoComunicacaoAumentativa.c oled/ssd1306_i2c.c)
 
 pico_set_program_name(projetoComunicacaoAumentativa "projetoComunicacaoAumentativa")
 pico_set_program_version(projetoComunicacaoAumentativa "0.1")

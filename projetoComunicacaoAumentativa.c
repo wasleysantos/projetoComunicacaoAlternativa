@@ -1,4 +1,6 @@
 /*
+Projeto no GITHUB: https://github.com/wasleysantos/projetoComunicacaoAumentativa
+Video no youtube: https://www.youtube.com/watch?v=KjrngxYopJA
 Aluno: Wasley dos Santos
 Projeto: TalkGo - Comunicação Alternativa
 
@@ -34,14 +36,14 @@ joystick e confirme com botão A quando a palavra ja estiver formada.
 Sinal de Emergência: Pressione o botão B para exibir “SOCORRO” no 
 display e ativar um alerta sonoro e visual. 
 
-Ultima atualização: 14/02/2025 08:23
+Ultima atualização: 25/02/2025 08:23
 */
 
 #include <stdio.h>  
 #include "pico/stdlib.h"  
 #include "hardware/adc.h" 
 #include "hardware/i2c.h"
-#include "ssd1306.h"
+#include "oled/ssd1306.h"
 #include <string.h>
 
 // Definição dos pinos para comunicação I2C
@@ -74,7 +76,7 @@ const char *menus[][5] = {
     {"Agua", "Comer", "Ao Banheiro", "Tomar banho", "Passear"},  
     {"Feliz", "Triste", "Com medo", "Cansado", "Dormir"},   
     {"Incrivel", "Obrigado", "Adoro voce", "Otimo trabalho", "Me faz feliz"},
-    {"Selecionar Letra"}  
+    {"Letra"}  
 };  
 
 // Definição dos títulos do menu principal
@@ -82,9 +84,9 @@ const char *menu_titles[] = {" TalkGo ", "Emergencia", "Necessidades", "Emocoes"
 
 // Alfabeto
 const char *alphabet[] = {
-    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", 
+    "Z", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", 
     "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", 
-    "U", "V", "W", "X", "Y", "Z"
+    "U", "V", "W", "X", "Y" 
 };
 
 // Função para desenhar uma string no display SSD1306 com escala
@@ -178,7 +180,7 @@ int main() {
     uint8_t ssd[ssd1306_buffer_length];  // Buffer para o display
     memset(ssd, 0, ssd1306_buffer_length);  // Limpa o buffer
     render_on_display(ssd, &frame_area);  // Renderiza o buffer no display
-    ssd1306_draw_string_scaled(ssd, 35, 10, "TalkGo", 2);   // Exibe o título "SpeakNow"
+    ssd1306_draw_string_scaled(ssd, 35, 10, "TalkGo", 2);   // Exibe o título "TalkGo"
     ssd1306_draw_string_scaled(ssd, 50, 30, "SLZ MA", 1);   // Exibe o subtítulo "SLZ MA"
     
     char buffer[16]; 
@@ -220,7 +222,7 @@ int main() {
                     gpio_put(LED_GREEN, false); 
                     gpio_put(LED_BLUE, false);  
                     gpio_put(LED_RED, true);     
-                    tone(600, 200); //acionando o buzzer             
+                    tone(600, 200);              
                     sleep_ms(200);               
                     gpio_put(LED_RED, false);    
                     tone(800, 200);              
@@ -250,7 +252,7 @@ int main() {
             if (vrx_value > 1000 && last_vrx_value <= 1000) {  // Avança no menu
                 current_menu = (current_menu + 1) % 6; 
                 menu_updated = true;
-                tone(500, 10); 
+                tone(700, 10); 
                 memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
                 render_on_display(ssd, &frame_area);
                 ssd1306_draw_string_scaled(ssd, 0, 30, menu_titles[current_menu], 2);  // Exibe o título do menu
@@ -258,7 +260,7 @@ int main() {
             } else if (vrx_value < 3000 && last_vrx_value >= 3000) {  // Retrocede no menu
                 current_menu = (current_menu - 1 + 6) % 6; 
                 menu_updated = true;
-                tone(500, 10); 
+                tone(700, 10); 
                 memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
                 render_on_display(ssd, &frame_area);
                 ssd1306_draw_string_scaled(ssd, 0, 30, menu_titles[current_menu], 2);  // Exibe o título do menu
@@ -282,7 +284,7 @@ int main() {
                 if (vrx_value > 1000 && last_vrx_value <= 1000) {  // Avança na seleção do alfabeto
                     menu_index = (menu_index + 1) % ALPHABET_SIZE; 
                     menu_updated = true;
-                    tone(500, 10); 
+                    tone(700, 10);  
                     memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
                     render_on_display(ssd, &frame_area);
                     ssd1306_draw_string_scaled(ssd, 50, 30, alphabet[menu_index], 2);  // Exibe a letra selecionada
@@ -290,7 +292,7 @@ int main() {
                 } else if (vrx_value < 3000 && last_vrx_value >= 3000) {  // Retrocede na seleção do alfabeto
                     menu_index = (menu_index - 1 + ALPHABET_SIZE) % ALPHABET_SIZE; 
                     menu_updated = true;
-                    tone(500, 10); 
+                    tone(700, 10);  
                     memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
                     render_on_display(ssd, &frame_area);
                     ssd1306_draw_string_scaled(ssd, 50, 30, alphabet[menu_index], 2);  // Exibe a letra selecionada
@@ -313,7 +315,7 @@ int main() {
                     if (vrx_value > 1000 && last_vrx_value <= 1000) {  // Avança na seleção do submenu
                         menu_index = (menu_index + 1) % 5; 
                         menu_updated = true;
-                        tone(500, 10); 
+                        tone(700, 10);  
                         memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
                         render_on_display(ssd, &frame_area);
                         ssd1306_draw_string_scaled(ssd, 0, 30, menus[current_menu][menu_index], 2);  // Exibe a opção selecionada
@@ -321,7 +323,7 @@ int main() {
                     } else if (vrx_value < 3000 && last_vrx_value >= 3000) {  // Retrocede na seleção do submenu
                         menu_index = (menu_index - 1 + 5) % 5; 
                         menu_updated = true;
-                        tone(500, 10); 
+                        tone(700, 10);  
                         memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
                         render_on_display(ssd, &frame_area);
                         ssd1306_draw_string_scaled(ssd, 0, 30, menus[current_menu][menu_index], 2);  // Exibe a opção selecionada
