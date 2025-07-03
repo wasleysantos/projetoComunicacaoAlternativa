@@ -1,438 +1,410 @@
-/*
-Projeto no GITHUB: https://github.com/wasleysantos/projetoComunicacaoAumentativa
-Video no youtube: https://www.youtube.com/watch?v=KjrngxYopJA
-Aluno: Wasley dos Santos
-Projeto: TalkGo - Comunicação Alternativa
-
-Público-Alvo:
-Idosos com Dificuldades Motoras ou na fala, Paralisia Cerebral, Esclerose Múltipla, 
-Acidente Vascular Cerebral (AVC), Doenças Neuromusculares.
-
-Resumo:
-O objetivo deste projeto é facilitar a comunicação de pessoas com deficiência 
-motora e/ou na fala, através de um sistema acessível que permite que o 
-usuário escolha sua fala utilizando um joystick. A mensagem gerada é então 
-apresentada de forma compreensível para quem a recebe através do LCD. 
-Muitas vezes, a comunicação dessas pessoas é dificultada pelas condições 
-de saúde e pela falta de soluções acessíveis. Com isso, meu objetivo é 
-oferecer uma alternativa eficaz, especialmente considerando que os 
-sistemas existentes são geralmente caros e de difícil acesso. Quero 
-criar uma ferramenta inclusiva e de fácil utilização para melhorar a 
-interação e a qualidade de vida dessas pessoas.
-
-Instruções de uso:
-Navegação no Menu: Utilize o joystick para mover para baixo ou cima e 
-selecionar uma categoria (Emergência, Necessidades, Emoções, etc.).
-
-Seleção de Opções: Pressione o botão central do joystick para entrar 
-no submenu e escolha uma frase ou ação desejada.
-
-Exibição da Mensagem: A opção selecionada será exibida no display LCD 
-para facilitar a comunicação.
-
-Modo Alfabeto: No menu "Alfabeto", navegue entre as letras com o 
-joystick e confirme com botão A quando a palavra ja estiver formada.
-
-Sinal de Emergência: Pressione o botão B para exibir “SOCORRO” no 
-display e ativar um alerta sonoro e visual. 
-
-Ultima atualização: 25/02/2025 08:23
-*/
-
-#include <stdio.h>  
-#include "pico/stdlib.h"  
-#include "hardware/adc.h" 
+#include <stdio.h>
+#include "pico/stdlib.h"
+#include "hardware/adc.h"
 #include "hardware/i2c.h"
 #include "oled/ssd1306.h"
+#include "som/buzzer.h"
 #include <string.h>
+#include "hardware/rtc.h"
+#include "pico/util/datetime.h"
+#include <math.h> // Para fabsf()
 
-// Definição dos pinos para comunicação I2C
+// Pinos I2C
 const uint I2C_SDA = 14, I2C_SCL = 15;
 
-// Definição dos pinos para LEDs e outros periféricos
-#define LED_RED 13  
-#define LED_GREEN 11  
-#define LED_BLUE 12 
-#define VRX_PIN 26  
-#define VRY_PIN 27  
-#define SW_PIN 22  
-#define BUZZER_PIN 10  
+// Pinos I2C para o MPU6050 (i2c0)
+const uint I2C_SDA_MPU = 0, I2C_SCL_MPU = 1;
+
+// Pinos periféricos
+#define LED_RED 13
+#define LED_GREEN 11
+#define LED_BLUE 12
+#define VRX_PIN 26
+#define SW_PIN 22
+#define BUZZER_PIN 10
 #define BTN_A 5
 #define BTN_B 6
-#define CANAL_ADC_TEMPERATURA 4  
-#define ALPHABET_SIZE (sizeof(alphabet) / sizeof(alphabet[0])) 
+#define CANAL_ADC_TEMPERATURA 4
+
+// Definições do MPU6050
+#define MPU6050_ADDR 0x68
+#define MPU6050_REG_PWR_MGMT_1 0x6B
+#define MPU6050_REG_ACCEL_XOUT_H 0x3B
+#define MPU6050_TILT_THRESHOLD_FORWARD 8000 // Limiar para inclinação para frente (ajuste conforme necessário)
+
+uint8_t ssd[ssd1306_buffer_length];
+struct render_area frame_area;
+char temperatura_str[16];
 
 // Variáveis de controle do menu
-bool in_submenu = false;  // Indica se estamos no submenu  
-int current_menu = 0, menu_index = 0, last_vry_value = 0;  
-bool sw_pressed = false, last_sw_state = false, menu_updated = false, selecting_option = false;  
-char word[100];  // Buffer para armazenar a palavra montada
-int word_index = 0; // Índice da palavra
+bool in_submenu = false;
+int current_menu = 0, menu_index = 0;
+bool sw_pressed = false, last_sw_state = false, selecting_option = false;
+char word[100];
+int word_index = 0;
+char hora_atual[12] = "00:00:00";
 
-// Definição das opções de menu
-const char *menus[][5] = {  
+// Menus (removida a opção "Letra")
+const char *menus[][5] = {
     {"Voltar"},
-    {"Ajuda", "Muita dor", "Enjoado", "Desorientado", "Mudar posicao"},
-    {"Agua", "Comer", "Ao Banheiro", "Tomar banho", "Passear"},  
-    {"Feliz", "Triste", "Com medo", "Cansado", "Dormir"},   
-    {"Incrivel", "Obrigado", "Adoro voce", "Otimo trabalho", "Me faz feliz"},
-    {"Letra"}  
-};  
+    {"Ajuda", "Dor", "Nausea", "Confuso", "Posicao"},
+    {"Agua", "Comer", "Banho", "Banheiro", "Andar"},
+    {"Feliz", "Triste", "Medo", "Cansado", "Dormir"},
+    {"Top", "Valeu", "Gosto", "Legal", "Feliz"}};
 
-// Definição dos títulos do menu principal
-const char *menu_titles[] = {" TalkGo ", "Emergencia", "Necessidades", "Emocoes", "Elogios", "Alfabeto"}; 
+// Títulos dos menus (removida a opção "Alfabeto")
+const char *menu_titles[] = {" TalkGo", "Alerta", "Pedido", "Humor", "Elogio"};
 
-// Alfabeto
-const char *alphabet[] = {
-    "Z", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", 
-    "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", 
-    "U", "V", "W", "X", "Y" 
-};
+// Pino e canal do microfone no ADC.
+#define MIC_CHANNEL 2
+#define MIC_PIN (26 + MIC_CHANNEL)
 
-// Função para desenhar uma string no display SSD1306 com escala
+// Parâmetros e macros do ADC.
+#define ADC_CLOCK_DIV 96.f
+#define SAMPLES 200 // Número de amostras que serão feitas do ADC.
+#define ADC_ADJUST(x) (x * 3.3f / (1 << 12u) - 1.65f) // Ajuste do valor do ADC para Volts.
+#define ADC_MAX 3.3f
+#define ADC_STEP (3.3f / 5.f) // Intervalos de volume do microfone.
+
+// Função para desenhar texto escalonado no buffer do OLED
 void ssd1306_draw_string_scaled(uint8_t *buffer, int x, int y, const char *text, int scale) {
     while (*text) {
-        for (int dx = 0; dx < scale; dx++)
-            for (int dy = 0; dy < scale; dy++)
-                ssd1306_draw_char(buffer, x + dx, y + dy, *text); // Desenha cada caractere
-        x += 6 * scale;  
+        for (int dx = 0; dx < scale; dx++) {
+            for (int dy = 0; dy < scale; dy++) {
+                ssd1306_draw_char(buffer, x + dx, y + dy, *text);
+            }
+        }
+        x += 6 * scale;
         text++;
     }
 }
 
-// Função para exibir o menu no console
-void print_menu() {  
-    if (in_submenu) {  
-        printf("\n%s:\n", menu_titles[current_menu]);  
-        for (int i = 0; i < 5; i++)  
-            if (menus[current_menu][i][0] != '\0')  
-                printf("%s %s\n", (i == menu_index) ? "->" : "  ", menus[current_menu][i]);  
-    } else {  
-        printf("------------------------------------\n");  
-        for (int i = 0; i < 6; i++)  
-            printf("%s %s\n", (i == current_menu) ? ">>" : "  ", menu_titles[i]);  
-        printf("---------------------------------\n");  
-    }  
+// Retorna a saudação dependendo da hora
+const char *obter_saudacao(int hora) {
+    if (hora >= 5 && hora < 12) {
+        return "Bom dia";
+    } else if (hora >= 12 && hora < 18) {
+        return "Boa tarde";
+    } else {
+        return "Boa noite";
+    }
 }
 
-// Função para gerar um tom no buzzer
-void tone(unsigned int frequency, unsigned int duration) {  
-    unsigned long period = 1000000 / frequency, end_time = time_us_64() + (duration * 1000);  
-    while (time_us_64() < end_time) {  
-        gpio_put(BUZZER_PIN, 1);  // Liga o buzzer  
-        sleep_us(period / 2);  
-        gpio_put(BUZZER_PIN, 0);  // Desliga o buzzer  
-        sleep_us(period / 2);  
-    }  
+// --- Funções do MPU6050 ---
+void mpu6050_init(i2c_inst_t *i2c) {
+    uint8_t buf[] = {MPU6050_REG_PWR_MGMT_1, 0x00};
+    i2c_write_blocking(i2c, MPU6050_ADDR, buf, 2, false);
 }
 
-// Função para atualizar os LEDs com base no menu selecionado
-void update_leds() {  
-    if ((current_menu == 1 && menu_index <= 5) || (current_menu == 2 && menu_index <= 5)) { 
-        gpio_put(LED_RED, true);   // Ativa LED vermelho
-        gpio_put(LED_GREEN, false); // Desativa LED verde
-        gpio_put(LED_BLUE, false);  // Desativa LED azul
-    } else if ((current_menu == 3 && menu_index <= 5) || (current_menu == 4 && menu_index <= 5) || (current_menu == 5 && menu_index <= 23)) {          
-        gpio_put(LED_GREEN, true);  // Ativa LED verde
-        gpio_put(LED_RED, false);    // Desativa LED vermelho
-        gpio_put(LED_BLUE, false);   // Desativa LED azul
-    } else {  
-        gpio_put(LED_RED, false);    // Desativa LED vermelho
-        gpio_put(LED_GREEN, false);   // Desativa LED verde
-        gpio_put(LED_BLUE, true);     // Ativa LED azul
-    }  
+void mpu6050_read_accel(i2c_inst_t *i2c, int16_t accel[3]) {
+    uint8_t buffer[6];
+    uint8_t reg = MPU6050_REG_ACCEL_XOUT_H;
+    i2c_write_blocking(i2c, MPU6050_ADDR, &reg, 1, true);
+    i2c_read_blocking(i2c, MPU6050_ADDR, buffer, 6, false);
+    accel[0] = (buffer[0] << 8) | buffer[1];
+    accel[1] = (buffer[2] << 8) | buffer[3];
+    accel[2] = (buffer[4] << 8) | buffer[5];
 }
 
-// Função para converter o valor lido do ADC para temperatura em graus Celsius  
-float ler_adc_para_temperatura(uint16_t valor_adc) {  
-    const float fator_conversao = 3.3f / (1 << 12);  // Conversão de 12 bits (0-4095) para 0-3.3V  
-    float tensao = valor_adc * fator_conversao;      // Converte o valor ADC para tensão  
-    return 27.0f - (tensao - 0.706f) / 0.001721f;  // Converte a tensão para temperatura em Celsius  
-}  
+void obter_hora_formatada(char *buffer, size_t len) {
+    datetime_t agora;
+    rtc_get_datetime(&agora);
+    snprintf(buffer, len, "%02d:%02d:%02d", agora.hour, agora.min, agora.sec);
+}
+
+// Função para ler temperatura do ADC
+float ler_temperatura(void) {
+    adc_select_input(CANAL_ADC_TEMPERATURA);
+    uint16_t leitura = adc_read();
+    float tensao = leitura * 3.3f / 4096;
+    return 27 - (tensao - 0.706f) / 0.001721f; // Fórmula da RP2040
+}
+
+// Centraliza o texto no eixo X baseado no comprimento e escala
+int text_centered_x(const char *text, int scale) {
+    int len = strlen(text);
+    int width = len * 6 * scale;
+    return (ssd1306_width - width) / 2;
+}
+
+// Atualiza o display OLED com até 3 linhas
+void atualizar_oled(const char *linha1, int escala1,
+                    const char *linha2, int escala2,
+                    const char *linha3, int escala3,
+                    uint8_t *ssd, struct render_area *area) {
+    memset(ssd, 0, ssd1306_buffer_length);
+
+    if (linha1)
+        ssd1306_draw_string_scaled(ssd, text_centered_x(linha1, escala1), 10, linha1, escala1);
+    if (linha2)
+        ssd1306_draw_string_scaled(ssd, text_centered_x(linha2, escala2), 30, linha2, escala2);
+    if (linha3)
+        ssd1306_draw_string_scaled(ssd, text_centered_x(linha3, escala3), 50, linha3, escala3);
+
+    render_on_display(ssd, area);
+}
+
+// Atualiza LEDs conforme menu
+void update_leds() {
+    if ((current_menu == 1 && menu_index <= 5) || (current_menu == 2 && menu_index <= 5)) {
+        gpio_put(LED_RED, true);
+        gpio_put(LED_GREEN, false);
+        gpio_put(LED_BLUE, false);
+    } else if ((current_menu == 3 && menu_index <= 5) || (current_menu == 4 && menu_index <= 5)) {
+        gpio_put(LED_GREEN, true);
+        gpio_put(LED_RED, false);
+        gpio_put(LED_BLUE, false);
+    } else {
+        gpio_put(LED_RED, false);
+        gpio_put(LED_GREEN, false);
+        gpio_put(LED_BLUE, true);
+    }
+}
+
+// Sons para navegação
+void play_tone_down() {
+    tone(800, 50);
+}
+
+void play_tone_up() {
+    tone(600, 50);
+}
 
 int main() {
-    stdio_init_all();  // Inicializa a biblioteca padrão de entrada/saída
-    print_menu();  // Exibe o menu inicial
-    adc_init();  // Inicializa o ADC (Conversor Analógico-Digital)
-    adc_gpio_init(VRX_PIN);  // Inicializa o pino do eixo X do joystick
-    adc_gpio_init(VRY_PIN);  // Inicializa o pino do eixo Y do joystick
-    adc_set_temp_sensor_enabled(true);  // Habilita o sensor de temperatura
-    adc_select_input(CANAL_ADC_TEMPERATURA);  // Seleciona o canal do ADC para temperatura
-    gpio_init(SW_PIN);  
-    gpio_set_dir(SW_PIN, GPIO_IN);  
-    gpio_pull_up(SW_PIN);  // Ativa o pull-up no pino do switch
-    gpio_init(BTN_A); gpio_set_dir(BTN_A, GPIO_IN); gpio_pull_up(BTN_A);  // Inicializa o botão A
-    gpio_init(BTN_B); gpio_set_dir(BTN_B, GPIO_IN); gpio_pull_up(BTN_B);  // Inicializa o botão B
-    i2c_init(i2c1, ssd1306_i2c_clock * 1000);  // Inicializa o barramento I2C
-    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);  // Configura o pino SDA para I2C
-    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);  // Configura o pino SCL para I2C
-    gpio_pull_up(I2C_SDA);  // Ativa o pull-up no pino SDA
-    gpio_pull_up(I2C_SCL);  // Ativa o pull-up no pino SCL
-    ssd1306_init();  // Inicializa o display OLED SSD1306
-    
-    // Define a área de renderização do display
-    struct render_area frame_area = {.start_column = 0, .end_column = ssd1306_width - 1, .start_page = 0, .end_page = ssd1306_n_pages - 1};
-    
-    uint16_t valor_adc = adc_read();  // Lê o valor do ADC
-    float temperatura_celsius = ler_adc_para_temperatura(valor_adc);  // Converte ADC para Celsius    
-    calculate_render_area_buffer_length(&frame_area);  // Calcula o tamanho do buffer para a área de renderização
-    
-    uint8_t ssd[ssd1306_buffer_length];  // Buffer para o display
-    memset(ssd, 0, ssd1306_buffer_length);  // Limpa o buffer
-    render_on_display(ssd, &frame_area);  // Renderiza o buffer no display
-    ssd1306_draw_string_scaled(ssd, 35, 10, "TalkGo", 2);   // Exibe o título "TalkGo"
-    ssd1306_draw_string_scaled(ssd, 50, 30, "SLZ MA", 1);   // Exibe o subtítulo "SLZ MA"
-    
-    char buffer[16]; 
-    snprintf(buffer, sizeof(buffer), "%.fC", temperatura_celsius);  // Formata a temperatura com 2 casas decimais
-    ssd1306_draw_string_scaled(ssd, 50, 50, buffer, 2);  // Exibe a temperatura no display
-    render_on_display(ssd, &frame_area);  // Renderiza no display
+    stdio_init_all();
 
-    // Inicializa os LEDs
-    gpio_init(LED_RED);  
-    gpio_init(LED_GREEN);  
+    adc_init();
+    adc_gpio_init(VRX_PIN);
+
+    gpio_init(SW_PIN);
+    gpio_set_dir(SW_PIN, GPIO_IN);
+    gpio_pull_up(SW_PIN);
+
+    gpio_init(BTN_A);
+    gpio_set_dir(BTN_A, GPIO_IN);
+    gpio_pull_up(BTN_A);
+
+    gpio_init(BTN_B);
+    gpio_set_dir(BTN_B, GPIO_IN);
+    gpio_pull_up(BTN_B);
+
+    i2c_init(i2c1, ssd1306_i2c_clock * 1000);
+    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C);
+    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C);
+    gpio_pull_up(I2C_SDA);
+    gpio_pull_up(I2C_SCL);
+
+    // Inicializa I2C0 para o MPU6050
+    i2c_init(i2c0, 400 * 1000);
+    gpio_set_function(I2C_SDA_MPU, GPIO_FUNC_I2C);
+    gpio_set_function(I2C_SCL_MPU, GPIO_FUNC_I2C);
+    gpio_pull_up(I2C_SDA_MPU);
+    gpio_pull_up(I2C_SCL_MPU);
+
+    mpu6050_init(i2c0);
+    ssd1306_init();
+    uint8_t dados[14];
+
+    datetime_t t = {2025, 6, 30, 1, 20, 0, 0};
+    rtc_init();
+    rtc_set_datetime(&t);
+
+    frame_area = (struct render_area){0, ssd1306_width - 1, 0, ssd1306_n_pages - 1};
+    calculate_render_area_buffer_length(&frame_area);
+
+    gpio_init(LED_RED);
+    gpio_init(LED_GREEN);
     gpio_init(LED_BLUE);
-    gpio_set_dir(LED_RED, GPIO_OUT);  
-    gpio_set_dir(LED_GREEN, GPIO_OUT);  
-    gpio_set_dir(LED_BLUE, GPIO_OUT);  
-    gpio_put(LED_RED, false);   // Apaga LED vermelho
-    gpio_put(LED_GREEN, false); // Apaga LED verde
-    gpio_put(LED_BLUE, false);  // Apaga LED azul
+    gpio_set_dir(LED_RED, GPIO_OUT);
+    gpio_set_dir(LED_GREEN, GPIO_OUT);
+    gpio_set_dir(LED_BLUE, GPIO_OUT);
 
-    // Inicializa o buzzer
-    gpio_init(BUZZER_PIN);  
-    gpio_set_dir(BUZZER_PIN, GPIO_OUT);  
-    gpio_put(BUZZER_PIN, 0);  // Desliga buzzer
+    buzzer_init(BUZZER_PIN);
 
-    uint16_t last_vrx_value = 2048, last_vry_value = 2048;  // Valores iniciais do joystick
-    bool last_sw_state = false;  // Último estado do botão switch
+    datetime_t agora;
+    rtc_get_datetime(&agora);
+    snprintf(hora_atual, sizeof(hora_atual), "%02d:%02d:%02d", agora.hour, agora.min, agora.sec);
+    char saudacao[16];
+    strcpy(saudacao, obter_saudacao(agora.hour));
+
+    atualizar_oled("TalkGo", 3, saudacao, 2, hora_atual, 2, ssd, &frame_area);
+
+    uint16_t last_vrx_value = 2048;
+    absolute_time_t ultimo_update = get_absolute_time();
+
+    // Variáveis para controle de debounce do MPU6050
+    absolute_time_t last_mpu_nav_time = get_absolute_time();
+    const uint64_t MPU_NAV_DEBOUNCE_US = 300000; // 300ms de debounce para MPU
 
     while (true) {
-        adc_select_input(0);  // Seleciona o canal do joystick X
-        uint16_t vrx_value = adc_read();  // Lê o valor do eixo X
-        adc_select_input(1);  // Seleciona o canal do joystick Y
-        uint16_t vry_value = adc_read();  // Lê o valor do eixo Y
-        bool sw_pressed = !gpio_get(SW_PIN);  // Verifica se o botão switch foi pressionado
+        adc_select_input(0);
+        uint16_t vrx_value = adc_read();
+        sw_pressed = !gpio_get(SW_PIN);
 
-        // Verifica se o botão B foi pressionado
+        // --- Leitura do MPU6050 ---
+        int16_t accel[3];
+        mpu6050_read_accel(i2c0, accel);
+        
+        // Verifica o tempo de debounce para navegação do MPU
+        bool can_mpu_navigate = absolute_time_diff_us(last_mpu_nav_time, get_absolute_time()) >= MPU_NAV_DEBOUNCE_US;
+
+        // Variáveis estáticas para armazenar leituras anteriores
+        static int16_t last_accel_y = 0;
+        static int16_t last_accel_x = 0; // Adicionada para o balanço para frente
+
+        // Detecta pico de aceleração (chacoalhar)
+        int16_t delta_y = accel[1] - last_accel_y;
+        bool mpu_shake_right = (can_mpu_navigate && delta_y > 8000);  // Balanço para direita
+        bool mpu_shake_left  = (can_mpu_navigate && delta_y < -8000); // Balanço para esquerda
+
+        // Detecta inclinação para frente
+        int16_t delta_x = accel[0] - last_accel_x;
+        bool mpu_tilt_forward = (can_mpu_navigate && delta_x < -MPU6050_TILT_THRESHOLD_FORWARD); // Balanço para frente (negativo para inclinar para frente)
+
+        bool moved_down = (vrx_value > 1000 && last_vrx_value <= 1000) || mpu_shake_right;
+        bool moved_up   = (vrx_value < 3000 && last_vrx_value >= 3000) || mpu_shake_left;
+        
+        // Use mpu_tilt_forward to select an option, similar to sw_pressed
+        bool mpu_select_option = mpu_tilt_forward;
+
+        last_accel_y = accel[1];
+        last_accel_x = accel[0]; // Atualiza a última leitura do eixo X
+
         if (gpio_get(BTN_B) == 0) {
-            sleep_ms(200);  // Debounce para evitar múltiplas leituras erradas
-            if (gpio_get(BTN_B) == 0) {  // Confirma a segunda leitura do botão
-                for (int i = 0; i < 10; i++) {  // Toca um som de alerta
-                    gpio_put(LED_GREEN, false); 
-                    gpio_put(LED_BLUE, false);  
-                    gpio_put(LED_RED, true);     
-                    tone(600, 200);              
-                    sleep_ms(200);               
-                    gpio_put(LED_RED, false);    
-                    tone(800, 200);              
-                    memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
-                    render_on_display(ssd, &frame_area);
-                    ssd1306_draw_string_scaled(ssd, 20, 30, "SOCORRO", 2);  // Exibe mensagem de socorro
-                    render_on_display(ssd, &frame_area);
-                }
-                calculate_render_area_buffer_length(&frame_area);  // Recalcula a área de renderização
-                memset(ssd, 0, ssd1306_buffer_length);  // Limpa o buffer
-                render_on_display(ssd, &frame_area);
-                ssd1306_draw_string_scaled(ssd, 35, 10, "TalkGo", 2);   
-                ssd1306_draw_string_scaled(ssd, 50, 30, "SLZ MA", 1);   
-                snprintf(buffer, sizeof(buffer), "%.fC", temperatura_celsius); 
-                ssd1306_draw_string_scaled(ssd, 50, 50, buffer, 2); 
-                render_on_display(ssd, &frame_area);
-                in_submenu = false; 
-                menu_index = 0; 
-                current_menu = 0; 
-                selecting_option = false; 
-                menu_updated = true; 
+            sleep_ms(200);
+            if (gpio_get(BTN_B) == 0) {
+                gpio_put(LED_GREEN, false);
+                gpio_put(LED_BLUE, false);
+                gpio_put(LED_RED, true);
+                atualizar_oled("SOCORRO", 2, NULL, 0, hora_atual, 2, ssd, &frame_area);
+                play_sos_alert(); // Assuming this function is defined elsewhere
+                gpio_put(LED_RED, false);
+                atualizar_oled("TalkGo", 3, saudacao, 2, hora_atual, 2, ssd, &frame_area);
+                in_submenu = false;
+                menu_index = 0;
+                current_menu = 0;
+                selecting_option = false;
             }
         }
 
-        // Controle de navegação no menu
         if (!in_submenu) {
-            if (vrx_value > 1000 && last_vrx_value <= 1000) {  // Avança no menu
-                current_menu = (current_menu + 1) % 6; 
-                menu_updated = true;
-                tone(700, 10); 
-                memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
-                render_on_display(ssd, &frame_area);
-                ssd1306_draw_string_scaled(ssd, 0, 30, menu_titles[current_menu], 2);  // Exibe o título do menu
-                render_on_display(ssd, &frame_area);
-            } else if (vrx_value < 3000 && last_vrx_value >= 3000) {  // Retrocede no menu
-                current_menu = (current_menu - 1 + 6) % 6; 
-                menu_updated = true;
-                tone(700, 10); 
-                memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
-                render_on_display(ssd, &frame_area);
-                ssd1306_draw_string_scaled(ssd, 0, 30, menu_titles[current_menu], 2);  // Exibe o título do menu
-                render_on_display(ssd, &frame_area);
+            if (moved_down) {
+                current_menu = (current_menu + 1) % 5;
+                play_tone_down();
+                atualizar_oled(menu_titles[current_menu], 2, NULL, 0, hora_atual, 2, ssd, &frame_area);
+                last_mpu_nav_time = get_absolute_time(); // Reset MPU debounce timer
+            } else if (moved_up) {
+                current_menu = (current_menu - 1 + 5) % 5;
+                play_tone_up();
+                atualizar_oled(menu_titles[current_menu], 2, NULL, 0, hora_atual, 2, ssd, &frame_area);
+                last_mpu_nav_time = get_absolute_time(); // Reset MPU debounce timer
             }
-
-            // Se o botão do joystick foi pressionado
-            if (sw_pressed && !last_sw_state) { 
-                in_submenu = true; // Entra no submenu
-                menu_index = 0; // Reseta a seleção do submenu
-                menu_updated = true;
+            // Add mpu_select_option here to enter submenu
+            if ((sw_pressed && !last_sw_state) || mpu_select_option) {
+                in_submenu = true;
+                menu_index = 0;
                 sleep_ms(200);
-                memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
-                render_on_display(ssd, &frame_area);
-                ssd1306_draw_string_scaled(ssd, 0, 30, menus[current_menu][menu_index], 2);  // Exibe a opção do submenu
-                render_on_display(ssd, &frame_area);
+                atualizar_oled(menus[current_menu][menu_index], 2, NULL, 0, hora_atual, 2, ssd, &frame_area);
+                last_mpu_nav_time = get_absolute_time(); // Reset MPU debounce timer
             }
         } else {
-            // Navegação no submenu
-            if (current_menu == 5) {  // Se estamos no menu de letras
-                if (vrx_value > 1000 && last_vrx_value <= 1000) {  // Avança na seleção do alfabeto
-                    menu_index = (menu_index + 1) % ALPHABET_SIZE; 
-                    menu_updated = true;
-                    tone(700, 10);  
-                    memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
-                    render_on_display(ssd, &frame_area);
-                    ssd1306_draw_string_scaled(ssd, 50, 30, alphabet[menu_index], 2);  // Exibe a letra selecionada
-                    render_on_display(ssd, &frame_area);
-                } else if (vrx_value < 3000 && last_vrx_value >= 3000) {  // Retrocede na seleção do alfabeto
-                    menu_index = (menu_index - 1 + ALPHABET_SIZE) % ALPHABET_SIZE; 
-                    menu_updated = true;
-                    tone(700, 10);  
-                    memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
-                    render_on_display(ssd, &frame_area);
-                    ssd1306_draw_string_scaled(ssd, 50, 30, alphabet[menu_index], 2);  // Exibe a letra selecionada
-                    render_on_display(ssd, &frame_area);
+            if (moved_down) {
+                menu_index = (menu_index + 1) % 5;
+                play_tone_down();
+                atualizar_oled(menus[current_menu][menu_index], 2, NULL, 0, hora_atual, 2, ssd, &frame_area);
+                last_mpu_nav_time = get_absolute_time(); // Reset MPU debounce timer
+            } else if (moved_up) {
+                menu_index = (menu_index - 1 + 5) % 5;
+                play_tone_up();
+                atualizar_oled(menus[current_menu][menu_index], 2, NULL, 0, hora_atual, 2, ssd, &frame_area);
+                last_mpu_nav_time = get_absolute_time(); // Reset MPU debounce timer
+            }
+            // Add mpu_select_option here to select an option within the submenu
+            if ((sw_pressed && !last_sw_state) || mpu_select_option) {
+                if (selecting_option) {
+                    tone(current_menu == 1 ? 1000 : 400, current_menu == 1 ? 10000 : 500);
+                    sleep_ms(500);
+                } else if (current_menu == 1) {
+                    selecting_option = true;
+                    atualizar_oled(menus[current_menu][menu_index], 2, NULL, 0, hora_atual, 2, ssd, &frame_area);
+                    play_emergency_select_pattern(); // Assuming this function is defined elsewhere
+                    sleep_ms(500);
+                } else {
+                    atualizar_oled(menus[current_menu][menu_index], 2, NULL, 0, hora_atual, 2, ssd, &frame_area);
+                    selecting_option = true;
+                    play_normal_select_pattern(); // Assuming this function is defined elsewhere
                 }
-                if (sw_pressed && !last_sw_state) {  // Se o botão do joystick foi pressionado
-                    if (word_index < sizeof(word) - 1) {
-                        word[word_index++] = 'A' + menu_index;  // Adiciona a letra correspondente
-                        word[word_index] = '\0';  // Adiciona o terminador de string
-                        printf("Palavra atual: %s\n", word);  // Exibe a palavra no console
-                        memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
-                        render_on_display(ssd, &frame_area);
-                        ssd1306_draw_string_scaled(ssd, 0, 30, word, 2);  // Exibe a palavra montada
-                        render_on_display(ssd, &frame_area);
-                    }
+                sleep_ms(5000);
+                last_mpu_nav_time = get_absolute_time(); // Reset MPU debounce timer
+            }
+            if (selecting_option && ((sw_pressed && !last_sw_state) || mpu_select_option)) { // Exit selection
+                in_submenu = false;
+                menu_index = 0;
+                current_menu = 0;
+                selecting_option = false;
+                sleep_ms(500);
+                atualizar_oled("TalkGo", 3, saudacao, 2, hora_atual, 2, ssd, &frame_area);
+                last_mpu_nav_time = get_absolute_time(); // Reset MPU debounce timer
+            }
+        }
+
+        if (gpio_get(BTN_A) == 0) {
+            sleep_ms(200); // Debounce button A
+            if (gpio_get(BTN_A) == 0) {
+                in_submenu = false;
+                selecting_option = false;
+                current_menu = 0;
+                menu_index = 0;
+                atualizar_oled("TalkGo", 3, saudacao, 2, hora_atual, 2, ssd, &frame_area);
+                last_mpu_nav_time = get_absolute_time(); // Reset MPU debounce timer
+            }
+        }
+
+        // Atualiza relógio e saudação a cada 1 segundo
+        if (absolute_time_diff_us(ultimo_update, get_absolute_time()) >= 1000000) {
+            rtc_get_datetime(&agora);
+            snprintf(hora_atual, sizeof(hora_atual), "%02d:%02d:%02d", agora.hour, agora.min, agora.sec);
+            strcpy(saudacao, obter_saudacao(agora.hour));
+
+            if (!in_submenu) {
+                if (current_menu == 0) {
+                    atualizar_oled("TalkGo", 3, saudacao, 2, hora_atual, 2, ssd, &frame_area);
+                } else {
+                    atualizar_oled(menu_titles[current_menu], 2, NULL, 0, hora_atual, 2, ssd, &frame_area);
                 }
             } else {
-                // Navegação no submenu existente
-                if (!selecting_option) {
-                    if (vrx_value > 1000 && last_vrx_value <= 1000) {  // Avança na seleção do submenu
-                        menu_index = (menu_index + 1) % 5; 
-                        menu_updated = true;
-                        tone(700, 10);  
-                        memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
-                        render_on_display(ssd, &frame_area);
-                        ssd1306_draw_string_scaled(ssd, 0, 30, menus[current_menu][menu_index], 2);  // Exibe a opção selecionada
-                        render_on_display(ssd, &frame_area);
-                    } else if (vrx_value < 3000 && last_vrx_value >= 3000) {  // Retrocede na seleção do submenu
-                        menu_index = (menu_index - 1 + 5) % 5; 
-                        menu_updated = true;
-                        tone(700, 10);  
-                        memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
-                        render_on_display(ssd, &frame_area);
-                        ssd1306_draw_string_scaled(ssd, 0, 30, menus[current_menu][menu_index], 2);  // Exibe a opção selecionada
-                        render_on_display(ssd, &frame_area);
-                    }
-                }
-
-                // Se o botão do joystick foi pressionado
-                if (sw_pressed && !last_sw_state) { 
-                    if (selecting_option) {
-                        printf("\nSelecionado: %s\n", menus[current_menu][menu_index]);
-                        tone(current_menu == 1 ? 1000 : 400, current_menu == 1 ? 10000 : 500);  // Toca tom alto para emergência
-                        sleep_ms(500);
-                    } else if (current_menu == 1) {  // Se a opção de ajuda foi selecionada
-                        selecting_option = true; // Ativa a seleção da opção
-                        printf("\n%s\n", menus[current_menu][menu_index]);
-                        memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
-                        render_on_display(ssd, &frame_area);
-                        ssd1306_draw_string_scaled(ssd, 0, 30, menus[current_menu][menu_index], 2);  // Exibe a opção selecionada
-                        render_on_display(ssd, &frame_area);
-                        for (int i = 0; i < 5; i++) {  // Toque de sirene alternando entre duas frequências
-                            tone(400, 300); 
-                            gpio_put(LED_RED, true);
-                            sleep_ms(200);
-                            gpio_put(LED_RED, false);
-                            tone(600, 300); 
-                            sleep_ms(200);
-                            gpio_put(LED_RED, true);
-                        }
-                        sleep_ms(500);
-                    } else {
-                        memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
-                        render_on_display(ssd, &frame_area);
-                        ssd1306_draw_string_scaled(ssd, 0, 30, menus[current_menu][menu_index], 2);  // Exibe a opção selecionada
-                        render_on_display(ssd, &frame_area);
-                        selecting_option = true; // Ativa a seleção da opção
-                        printf("\n%s\n", menus[current_menu][menu_index]);
-                        for (int i = 0; i < 2; i++) {  // Toca uma sequência de tons
-                            tone(200, 100);
-                            sleep_ms(300);
-                            tone(400, 100);
-                            sleep_ms(300);
-                            tone(100, 100);
-                            sleep_ms(300);
-                        }
-                    }
-                    sleep_ms(5000); // Aguarda antes de continuar
-                }
-
-                // Voltar ao menu principal
-                if (selecting_option && sw_pressed && !last_sw_state) { 
-                    printf("\nVoltando ao menu principal!\n");
-                    in_submenu = false; // Retorna ao menu principal
-                    menu_index = 0; // Reseta a seleção do submenu
-                    current_menu = 0; // Retorna ao menu inicial
-                    selecting_option = false; // Desativa a seleção da opção
-                    menu_updated = true; // Indica que o menu foi atualizado
-                    sleep_ms(500);
-                    memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
-                    render_on_display(ssd, &frame_area);
-                    ssd1306_draw_string_scaled(ssd, 35, 10, "TalkGo", 2);   
-                    ssd1306_draw_string_scaled(ssd, 50, 30, "SLZ MA", 1);   
-                    snprintf(buffer, sizeof(buffer), "%.fC", temperatura_celsius); 
-                    ssd1306_draw_string_scaled(ssd, 50, 50, buffer, 2); 
-                    render_on_display(ssd, &frame_area);
-                }
+                atualizar_oled(menus[current_menu][menu_index], 2, NULL, 0, hora_atual, 2, ssd, &frame_area);
             }
+
+            ultimo_update = get_absolute_time();
         }
-        // Verifica se o botão A foi pressionado
-        if (gpio_get(BTN_A) == 0) {
-            printf("Palavra finalizada: %s\n", word); // Exibe a palavra finalizada no console
-            memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
-            render_on_display(ssd, &frame_area);
-            ssd1306_draw_string_scaled(ssd, 20, 20, "Palavra", 2);   
-            ssd1306_draw_string_scaled(ssd, 20, 50, word, 2);   
-            render_on_display(ssd, &frame_area);
-            for (int i = 0; i < 1; i++) {  // Toca uma sequência de tons
-                tone(200, 100);
-                sleep_ms(300);
-                tone(400, 100);
-                sleep_ms(300);
-                tone(600, 100);
-                sleep_ms(300);
-            }
-            sleep_ms(5000); // Aguarda antes de continuar
-            memset(word, 0, sizeof(word)); // Limpa a palavra
-            word_index = 0; // Reseta o índice da palavra
-            in_submenu = false; // Retorna ao menu principal
-            current_menu = 0; // Retorna ao menu inicial
-            menu_index = 0; // Reseta a seleção do submenu
-            menu_updated = true; // Indica que o menu foi atualizado
-            sleep_ms(500);
-            memset(ssd, 0, ssd1306_buffer_length);  // Limpa o display
-            render_on_display(ssd, &frame_area);
-            ssd1306_draw_string_scaled(ssd, 35, 10, "TalkGo", 2);   
-            ssd1306_draw_string_scaled(ssd, 50, 30, "SLZ MA", 1);   
-            snprintf(buffer, sizeof(buffer), "%.fC", temperatura_celsius); 
-            ssd1306_draw_string_scaled(ssd, 50, 50, buffer, 2); 
-            render_on_display(ssd, &frame_area);
+
+        // --- DETECÇÃO DE QUEDA POR SOM ALTO ---
+        adc_select_input(MIC_CHANNEL);
+        int som_total = 0;
+        for (int i = 0; i < SAMPLES; i++) {
+            int leitura = adc_read();
+            float volts = ADC_ADJUST(leitura);
+            som_total += fabsf(volts);
         }
-        update_leds(); // Atualiza os LEDs conforme necessário
-        if (menu_updated) {
-            print_menu(); // Exibe o menu atualizado
-            menu_updated = false; // Reseta a flag de atualização
+
+        float som_medio = som_total / (float)SAMPLES;
+
+        if (som_medio > 0.6f) {
+            atualizar_oled("QUEDA", 2, "SOCORRO", 2, hora_atual, 2, ssd, &frame_area);
+            gpio_put(LED_BLUE, false);
+            gpio_put(LED_RED, true);
+            play_sos_alert(); // Assuming this function is defined elsewhere
+            sleep_ms(5000);
+            gpio_put(LED_RED, false);
+            atualizar_oled("TalkGo", 3, saudacao, 2, hora_atual, 2, ssd, &frame_area);
         }
-        last_vrx_value = vrx_value; // Atualiza o valor anterior do joystick X
-        last_vry_value = vry_value; // Atualiza o valor anterior do joystick Y
-        last_sw_state = sw_pressed; // Atualiza o último estado do botão switch
-        sleep_ms(100); // Delay para evitar processamento excessivo
+
+        update_leds();
+        last_vrx_value = vrx_value;
+        last_sw_state = sw_pressed;
+        sleep_ms(100);
     }
-    return 0; // Finaliza o programa
+
+    return 0;
 }

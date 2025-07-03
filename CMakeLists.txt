@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(projetoComunicacaoAumentativa projetoComunicacaoAumentativa.c oled/ssd1306_i2c.c)
+add_executable(projetoComunicacaoAumentativa projetoComunicacaoAumentativa.c oled/ssd1306_i2c.c som/buzzer.c)
 
 pico_set_program_name(projetoComunicacaoAumentativa "projetoComunicacaoAumentativa")
 pico_set_program_version(projetoComunicacaoAumentativa "0.1")
@@ -46,7 +46,9 @@ pico_enable_stdio_usb(projetoComunicacaoAumentativa 1)
 
 # Add the standard library to the build
 target_link_libraries(projetoComunicacaoAumentativa
-        pico_stdlib)
+        pico_stdlib
+        hardware_rtc
+        hardware_dma)
 
 # Add the standard include files to the build
 target_include_directories(projetoComunicacaoAumentativa PRIVATE
